@@ -1,0 +1,31 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:healthcare_test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+
+app:
+  security:
+    jwt-secret: test-secret-test-secret-test-secret-test-secret
+    access-token-minutes: 30
+    refresh-token-days: 14
+  bootstrap:
+    admin-email:
+    admin-password:
+  aws:
+    region: ap-south-1
+    s3-bucket: healthcare-reminder-prescriptions
+    s3-prescription-prefix: prescriptions
+    s3-presigned-url-minutes: 15
+    max-prescription-upload-bytes: 10485760
+  firebase:
+    credentials-path:
+  notifications:
+    fcm-retry-delay-ms: 0

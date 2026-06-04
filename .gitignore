@@ -1,0 +1,26 @@
+.DS_Store
+.idea/
+*.iml
+
+# Java / Maven
+target/
+*.class
+
+# Node
+node_modules/
+dist/
+build/
+
+# Local secrets
+.env
+.env.*
+!.env.example
+application-local.yml
+application-local.properties
+firebase-service-account*.json
+*.pem
+*.key
+
+# Logs
+*.log
+
