@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - healthcare-assignment
 
 jobs:
   backend:
@@ -48,3 +49,17 @@ jobs:
       - name: Build web
         working-directory: web
         run: npm run build
+
+  docker:
+    name: Validate Docker builds
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: docker build -t healthcare-reminder-backend ./backend
+
+      - name: Build web image
+        run: docker build -t healthcare-reminder-web ./web

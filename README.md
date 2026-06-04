@@ -38,6 +38,8 @@ GitHub Actions runs the backend test suite and frontend production build on ever
 .github/workflows/backend-ci.yml
 ```
 
+The pipeline also validates Docker builds for the backend and web dashboard.
+
 ## First Run
 
 Start PostgreSQL:
@@ -58,6 +60,55 @@ Health check:
 ```bash
 curl http://localhost:8080/api/v1/health
 ```
+
+Run the frontend:
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:5173
+```
+
+## Production-Ready Deployment Baseline
+
+This repository includes Docker packaging for both apps:
+
+```text
+backend/Dockerfile
+web/Dockerfile
+docker-compose.prod.yml
+```
+
+Before deploying, set strong production values for:
+
+```text
+POSTGRES_PASSWORD
+JWT_SECRET
+AWS_S3_BUCKET
+AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY, or an IAM role
+FIREBASE_CREDENTIALS_PATH
+TWILIO_ACCOUNT_SID
+TWILIO_AUTH_TOKEN
+CORS_ALLOWED_ORIGINS
+BOOTSTRAP_ADMIN_EMAIL
+BOOTSTRAP_ADMIN_PASSWORD
+```
+
+Production compose example:
+
+```bash
+docker compose -f docker-compose.prod.yml up --build
+```
+
+For AWS deployment, prefer IAM roles over static access keys when running on EC2/ECS. Keep S3 private, use HTTPS at the load balancer or reverse proxy, and rotate Twilio/Firebase/AWS secrets outside Git.
+
+Before handling real patient data, complete the [production checklist](docs/production-checklist.md).
 
 ## Postman Testing
 

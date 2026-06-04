@@ -1,0 +1,6 @@
+target/
+.mvn/
+*.log
+application-local.yml
+application-local.properties
+firebase-service-account*.json
