@@ -110,6 +110,8 @@ For AWS deployment, prefer IAM roles over static access keys when running on EC2
 
 Before handling real patient data, complete the [production checklist](docs/production-checklist.md).
 
+For OCR provider comparison and handwritten prescription testing, see [docs/ocr-evaluation.md](docs/ocr-evaluation.md).
+
 ## Postman Testing
 
 Import these files into Postman:

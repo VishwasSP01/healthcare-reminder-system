@@ -44,6 +44,7 @@ create table prescription (
     original_filename varchar(255) not null,
     content_type varchar(120) not null,
     status varchar(32) not null,
+    ocr_provider varchar(60) not null default 'textract',
     extracted_text text,
     uploaded_at timestamp with time zone not null default now()
 );

@@ -23,7 +23,7 @@ import software.amazon.awssdk.services.textract.model.S3Object;
 import software.amazon.awssdk.services.textract.model.StartDocumentTextDetectionRequest;
 
 @Component
-class TextractPrescriptionExtractor {
+class TextractPrescriptionExtractor implements PrescriptionOcrProvider {
 
     private static final Pattern DOSAGE_PATTERN = Pattern.compile("(?i)\\b\\d+(?:\\.\\d+)?\\s?(?:mg|mcg|g|ml|iu)\\b");
     private static final Pattern DURATION_PATTERN = Pattern.compile("(?i)\\b(?:for\\s*)?\\d+\\s?(?:day|days|week|weeks|month|months)\\b");
@@ -34,14 +34,20 @@ class TextractPrescriptionExtractor {
         this.textractClient = textractClient;
     }
 
-    TextractResult extract(String bucket, String key, String contentType) {
+    @Override
+    public String providerName() {
+        return "textract";
+    }
+
+    @Override
+    public OcrExtractionResult extract(String bucket, String key, String contentType) {
         if ("application/pdf".equals(contentType)) {
             return extractPdf(bucket, key);
         }
         return extractImage(bucket, key);
     }
 
-    private TextractResult extractImage(String bucket, String key) {
+    private OcrExtractionResult extractImage(String bucket, String key) {
         DetectDocumentTextRequest request = DetectDocumentTextRequest.builder()
                 .document(Document.builder()
                         .s3Object(S3Object.builder().bucket(bucket).name(key).build())
@@ -52,7 +58,7 @@ class TextractPrescriptionExtractor {
         return fromBlocks(response.blocks());
     }
 
-    private TextractResult extractPdf(String bucket, String key) {
+    private OcrExtractionResult extractPdf(String bucket, String key) {
         StartDocumentTextDetectionRequest startRequest = StartDocumentTextDetectionRequest.builder()
                 .documentLocation(location -> location.s3Object(S3Object.builder().bucket(bucket).name(key).build()))
                 .build();
@@ -86,7 +92,7 @@ class TextractPrescriptionExtractor {
         throw new IllegalStateException("Textract PDF OCR timed out");
     }
 
-    private TextractResult fromBlocks(List<software.amazon.awssdk.services.textract.model.Block> blocks) {
+    private OcrExtractionResult fromBlocks(List<software.amazon.awssdk.services.textract.model.Block> blocks) {
         List<String> lines = blocks.stream()
                 .filter(block -> block.blockType() == BlockType.LINE)
                 .sorted(Comparator.comparing(block -> block.geometry().boundingBox().top()))
@@ -100,7 +106,7 @@ class TextractPrescriptionExtractor {
                 .min(Float::compare)
                 .orElse(0.0f);
 
-        return new TextractResult(String.join("\n", lines), parseMedicines(lines), minConfidence < 70.0);
+        return new OcrExtractionResult(providerName(), String.join("\n", lines), parseMedicines(lines), minConfidence < 70.0);
     }
 
     private void sleep() {

@@ -48,6 +48,9 @@ public class Prescription {
     @Column(nullable = false)
     private PrescriptionStatus status = PrescriptionStatus.PENDING;
 
+    @Column(name = "ocr_provider", nullable = false)
+    private String ocrProvider = "textract";
+
     @Column(name = "extracted_text")
     private String extractedText;
 
@@ -100,6 +103,14 @@ public class Prescription {
         this.status = status;
     }
 
+    public String getOcrProvider() {
+        return ocrProvider;
+    }
+
+    public void setOcrProvider(String ocrProvider) {
+        this.ocrProvider = ocrProvider;
+    }
+
     public String getExtractedText() {
         return extractedText;
     }
@@ -121,4 +132,3 @@ public class Prescription {
         medicines.addAll(newMedicines);
     }
 }
-

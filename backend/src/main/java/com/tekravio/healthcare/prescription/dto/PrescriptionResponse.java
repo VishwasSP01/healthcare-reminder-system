@@ -12,6 +12,7 @@ public record PrescriptionResponse(
         String originalFilename,
         String contentType,
         PrescriptionStatus status,
+        String ocrProvider,
         String s3Key,
         String fileUrl,
         String extractedText,
@@ -25,6 +26,7 @@ public record PrescriptionResponse(
                 prescription.getOriginalFilename(),
                 prescription.getContentType(),
                 prescription.getStatus(),
+                prescription.getOcrProvider(),
                 prescription.getS3Key(),
                 fileUrl,
                 prescription.getExtractedText(),
@@ -32,4 +34,3 @@ public record PrescriptionResponse(
                 prescription.getMedicines().stream().map(MedicineResponse::from).toList());
     }
 }
-

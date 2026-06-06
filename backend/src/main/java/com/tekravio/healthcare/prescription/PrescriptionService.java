@@ -31,19 +31,19 @@ public class PrescriptionService {
     private final PrescriptionRepository prescriptionRepository;
     private final PatientProfileRepository patientRepository;
     private final S3PrescriptionStorage storage;
-    private final TextractPrescriptionExtractor extractor;
+    private final PrescriptionOcrRouter ocrRouter;
     private final AwsProperties awsProperties;
 
     public PrescriptionService(
             PrescriptionRepository prescriptionRepository,
             PatientProfileRepository patientRepository,
             S3PrescriptionStorage storage,
-            TextractPrescriptionExtractor extractor,
+            PrescriptionOcrRouter ocrRouter,
             AwsProperties awsProperties) {
         this.prescriptionRepository = prescriptionRepository;
         this.patientRepository = patientRepository;
         this.storage = storage;
-        this.extractor = extractor;
+        this.ocrRouter = ocrRouter;
         this.awsProperties = awsProperties;
     }
 
@@ -65,7 +65,8 @@ public class PrescriptionService {
 
         try {
             storage.upload(key, file);
-            TextractResult result = extractor.extract(awsProperties.s3Bucket(), key, file.getContentType());
+            OcrExtractionResult result = ocrRouter.extract(awsProperties.s3Bucket(), key, file.getContentType());
+            prescription.setOcrProvider(result.provider());
             prescription.setExtractedText(result.rawText());
             prescription.replaceMedicines(toMedicines(prescription, patient, result.medicineCandidates(), false));
             prescription.setStatus(result.lowConfidence() || result.medicineCandidates().isEmpty()
