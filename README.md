@@ -6,6 +6,26 @@ Backend-first implementation of the Tekravio Java Healthcare assignment.
 
 Patients upload prescriptions, the backend stores them in private AWS S3 storage, extracts text using AWS Textract, creates medicine and diet schedules, and sends reminders through Firebase Cloud Messaging. If FCM is missing or fails, the backend can fall back to WhatsApp through Twilio.
 
+## Architecture At A Glance
+
+```text
++------------------+        +---------------------+        +------------------+
+| React Web UI     | -----> | Spring Boot API     | -----> | PostgreSQL       |
+| localhost:5173   |        | localhost:8080      |        | Docker database  |
++------------------+        +----------+----------+        +------------------+
+                                      |
+                                      +----> Private AWS S3 prescription files
+                                      |
+                                      +----> OCR provider router: Textract now,
+                                      |      Gemini/Azure evaluation documented
+                                      |
+                                      +----> Firebase FCM reminders
+                                      |
+                                      +----> Twilio WhatsApp fallback
+                                      |
+                                      +----> Audit log for sensitive actions
+```
+
 ## Current Setup
 
 - AWS S3 bucket: `healthcare-reminder-prescriptions`
@@ -52,7 +72,7 @@ Run the backend:
 
 ```bash
 cd backend
-mvn spring-boot:run
+AWS_PROFILE=healthcare-dev mvn spring-boot:run
 ```
 
 Health check:
@@ -163,6 +183,7 @@ GET /api/v1/admin/patients
 GET /api/v1/admin/patients/{patientId}
 PATCH /api/v1/admin/patients/{patientId}/activate
 PATCH /api/v1/admin/patients/{patientId}/deactivate
+GET /api/v1/admin/patients/{patientId}/prescriptions
 ```
 
 ### Prescriptions
@@ -174,7 +195,7 @@ GET /api/v1/prescriptions/{prescriptionId}
 PUT /api/v1/prescriptions/{prescriptionId}/medicines
 ```
 
-Prescription upload accepts JPG, PNG, and PDF files up to 10 MB. Files are stored privately in S3 under `prescriptions/{patientId}/{uuid}.{ext}`. Textract extracts raw text and the backend attempts a first-pass medicine parse. Low-confidence or empty extraction results are marked for manual review, and the manual medicines endpoint lets the patient correct the OCR result.
+Prescription upload accepts JPG, PNG, and PDF files up to 10 MB. Files are stored privately in S3 under `prescriptions/{patientId}/{uuid}.{ext}`. Textract extracts raw text and the backend attempts a first-pass medicine parse. Low-confidence, empty, or unavailable OCR results are preserved as `MANUAL_REVIEW` instead of dropping the upload, and the manual medicines endpoint lets the patient correct the OCR result.
 
 ### Medicine Schedules And Reminders
 
@@ -204,7 +225,7 @@ action=TAKE
 medicineName
 ```
 
-If a patient has no FCM token, the attempt is logged as failed. If FCM fails, the backend retries once after `FCM_RETRY_DELAY_MS`, which defaults to 60 seconds.
+If a patient has no FCM token, the attempt is logged as failed. If FCM fails, the backend retries once. For local testing `FCM_RETRY_DELAY_MS` defaults to `0` so the scheduler is never blocked by a long sleep. Production can raise this value, but a queue-based async retry is preferred for real traffic.
 
 ### WhatsApp Fallback
 
@@ -227,6 +248,10 @@ TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
 ```
 
 Patient `whatsappNumber` should be stored in E.164 format, for example `+919876543210`. The backend adds the `whatsapp:` prefix before sending.
+
+### Audit Log
+
+Sensitive actions such as prescription upload, manual OCR correction, medicine schedule changes, and diet plan changes are written to `audit_log`. This keeps the bonus HIPAA-style audit feature real instead of leaving only an unused database table.
 
 ### Diet Plans And Reminders
 

@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 
+import com.tekravio.healthcare.audit.AuditLogService;
 import com.tekravio.healthcare.common.ApiException;
 import com.tekravio.healthcare.diet.dto.CreateDietPlanRequest;
 import com.tekravio.healthcare.diet.dto.DietComplianceResponse;
@@ -28,20 +29,23 @@ public class DietPlanService {
     private final DietReminderLogRepository dietReminderLogRepository;
     private final PatientProfileRepository patientRepository;
     private final DietReminderNotificationPort notificationPort;
+    private final AuditLogService auditLogService;
 
     public DietPlanService(
             DietPlanRepository dietPlanRepository,
             DietReminderLogRepository dietReminderLogRepository,
             PatientProfileRepository patientRepository,
-            DietReminderNotificationPort notificationPort) {
+            DietReminderNotificationPort notificationPort,
+            AuditLogService auditLogService) {
         this.dietPlanRepository = dietPlanRepository;
         this.dietReminderLogRepository = dietReminderLogRepository;
         this.patientRepository = patientRepository;
         this.notificationPort = notificationPort;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional
-    public DietPlanResponse create(CreateDietPlanRequest request) {
+    public DietPlanResponse create(AuthPrincipal principal, CreateDietPlanRequest request) {
         validateDateRange(request.startDate(), request.endDate());
         PatientProfile patient = patientRepository.findById(request.patientId())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Patient not found"));
@@ -54,14 +58,17 @@ public class DietPlanService {
                 request.calories(),
                 request.startDate(),
                 request.endDate());
-        return DietPlanResponse.from(dietPlanRepository.save(plan), isToday(plan, LocalDate.now(ZoneOffset.UTC)));
+        DietPlan saved = dietPlanRepository.save(plan);
+        auditLogService.record(principal.userId(), "DIET_PLAN_CREATED", "DIET_PLAN", saved.getId());
+        return DietPlanResponse.from(saved, isToday(saved, LocalDate.now(ZoneOffset.UTC)));
     }
 
     @Transactional
-    public DietPlanResponse deactivate(Long dietPlanId) {
+    public DietPlanResponse deactivate(AuthPrincipal principal, Long dietPlanId) {
         DietPlan plan = dietPlanRepository.findById(dietPlanId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Diet plan not found"));
         plan.setActive(false);
+        auditLogService.record(principal.userId(), "DIET_PLAN_DEACTIVATED", "DIET_PLAN", plan.getId());
         return DietPlanResponse.from(plan, isToday(plan, LocalDate.now(ZoneOffset.UTC)));
     }
 

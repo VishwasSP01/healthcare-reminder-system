@@ -3,6 +3,8 @@ package com.tekravio.healthcare.admin;
 import com.tekravio.healthcare.diet.DietPlanService;
 import com.tekravio.healthcare.diet.dto.CreateDietPlanRequest;
 import com.tekravio.healthcare.diet.dto.DietPlanResponse;
+import com.tekravio.healthcare.security.AuthPrincipal;
+import com.tekravio.healthcare.security.CurrentUser;
 
 import jakarta.validation.Valid;
 
@@ -31,8 +33,10 @@ class AdminDietController {
     }
 
     @PostMapping
-    ResponseEntity<DietPlanResponse> create(@Valid @RequestBody CreateDietPlanRequest request) {
-        return ResponseEntity.ok(dietPlanService.create(request));
+    ResponseEntity<DietPlanResponse> create(
+            @CurrentUser AuthPrincipal principal,
+            @Valid @RequestBody CreateDietPlanRequest request) {
+        return ResponseEntity.ok(dietPlanService.create(principal, request));
     }
 
     @GetMapping("/patient/{patientId}")
@@ -43,8 +47,8 @@ class AdminDietController {
     }
 
     @PatchMapping("/{dietPlanId}/deactivate")
-    ResponseEntity<DietPlanResponse> deactivate(@PathVariable Long dietPlanId) {
-        return ResponseEntity.ok(dietPlanService.deactivate(dietPlanId));
+    ResponseEntity<DietPlanResponse> deactivate(@CurrentUser AuthPrincipal principal, @PathVariable Long dietPlanId) {
+        return ResponseEntity.ok(dietPlanService.deactivate(principal, dietPlanId));
     }
 }
 

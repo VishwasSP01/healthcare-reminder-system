@@ -2,6 +2,8 @@ package com.tekravio.healthcare.admin;
 
 import com.tekravio.healthcare.patient.PatientService;
 import com.tekravio.healthcare.patient.dto.PatientResponse;
+import com.tekravio.healthcare.prescription.PrescriptionService;
+import com.tekravio.healthcare.prescription.dto.PrescriptionResponse;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -21,9 +23,11 @@ import org.springframework.web.bind.annotation.RestController;
 class AdminPatientController {
 
     private final PatientService patientService;
+    private final PrescriptionService prescriptionService;
 
-    AdminPatientController(PatientService patientService) {
+    AdminPatientController(PatientService patientService, PrescriptionService prescriptionService) {
         this.patientService = patientService;
+        this.prescriptionService = prescriptionService;
     }
 
     @GetMapping
@@ -36,6 +40,13 @@ class AdminPatientController {
     @GetMapping("/{patientId}")
     ResponseEntity<PatientResponse> getPatient(@PathVariable Long patientId) {
         return ResponseEntity.ok(patientService.getPatient(patientId));
+    }
+
+    @GetMapping("/{patientId}/prescriptions")
+    ResponseEntity<Page<PrescriptionResponse>> getPatientPrescriptions(
+            @PathVariable Long patientId,
+            @PageableDefault(size = 20, sort = "uploadedAt") Pageable pageable) {
+        return ResponseEntity.ok(prescriptionService.historyForPatient(patientId, pageable));
     }
 
     @PatchMapping("/{patientId}/activate")

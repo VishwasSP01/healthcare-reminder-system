@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 
 const today = new Date().toISOString().slice(0, 10);
+const demoEmail = "patient-" + Date.now() + "@example.com";
 
 function readSession() {
   return {
@@ -18,14 +19,26 @@ async function api(path, options = {}, token = "") {
 
   const response = await fetch(path, { ...options, headers });
   const text = await response.text();
-  const data = text ? JSON.parse(text) : null;
+  let data = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { message: text };
+    }
+  }
 
   if (!response.ok) {
-    const message = data?.message || data?.error || `Request failed with ${response.status}`;
+    const fieldErrors = data?.fields ? Object.entries(data.fields).map(([field, message]) => `${field}: ${message}`).join(", ") : "";
+    const message = fieldErrors || data?.message || data?.error || `Request failed with ${response.status}`;
     throw new Error(message);
   }
 
   return data;
+}
+
+function pageContent(data) {
+  return Array.isArray(data) ? data : data?.content || [];
 }
 
 function App() {
@@ -38,6 +51,7 @@ function App() {
   const [reminders, setReminders] = useState([]);
   const [dietToday, setDietToday] = useState([]);
   const [dietReminders, setDietReminders] = useState([]);
+  const [adherence, setAdherence] = useState(null);
   const [compliance, setCompliance] = useState(null);
   const [patients, setPatients] = useState([]);
 
@@ -45,6 +59,9 @@ function App() {
   const isAdminLoggedIn = Boolean(session.adminAccessToken);
 
   function savePatientSession(data) {
+    if (!data?.accessToken || !data?.refreshToken) {
+      throw new Error("Login succeeded but tokens were missing from the response.");
+    }
     localStorage.setItem("accessToken", data.accessToken);
     localStorage.setItem("refreshToken", data.refreshToken);
     setSession(readSession());
@@ -75,23 +92,25 @@ function App() {
   }
 
   async function loadPatientDashboard() {
-    const [me, prescriptionPage, medicineSchedules, medicineReminders, meals, mealReminders, dietScore] =
+    const [me, prescriptionPage, medicineSchedules, medicineReminders, medicineAdherence, meals, mealReminders, dietScore] =
       await Promise.all([
         api("/api/v1/patients/me", {}, session.accessToken),
         api("/api/v1/prescriptions?page=0&size=10", {}, session.accessToken),
         api("/api/v1/medicine-schedules", {}, session.accessToken),
         api("/api/v1/medicine-schedules/reminders", {}, session.accessToken),
+        api("/api/v1/medicine-schedules/adherence", {}, session.accessToken),
         api("/api/v1/diet/today", {}, session.accessToken),
         api("/api/v1/diet/reminders", {}, session.accessToken),
         api("/api/v1/diet/compliance", {}, session.accessToken)
       ]);
 
     setProfile(me);
-    setPrescriptions(prescriptionPage.content || []);
-    setSchedules(medicineSchedules || []);
-    setReminders(medicineReminders || []);
+    setPrescriptions(pageContent(prescriptionPage));
+    setSchedules(pageContent(medicineSchedules));
+    setReminders(pageContent(medicineReminders));
+    setAdherence(medicineAdherence);
     setDietToday(meals || []);
-    setDietReminders(mealReminders || []);
+    setDietReminders(pageContent(mealReminders));
     setCompliance(dietScore);
   }
 
@@ -156,6 +175,7 @@ function App() {
           nextReminder={nextReminder}
           dietToday={dietToday}
           dietReminders={dietReminders}
+          adherence={adherence}
           compliance={compliance}
         />
       ) : (
@@ -186,6 +206,7 @@ function PatientArea(props) {
     nextReminder,
     dietToday,
     dietReminders,
+    adherence,
     compliance
   } = props;
 
@@ -222,9 +243,9 @@ function PatientArea(props) {
             })}>Mark taken</button>
             <button onClick={() => run("Snoozing reminder", async () => {
               await api(`/api/v1/medicine-schedules/reminders/${nextReminder.id}/snooze`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ minutes: 10 })
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ minutes: 10 })
               }, session.accessToken);
               await loadPatientDashboard();
             })}>Snooze 10 min</button>
@@ -232,7 +253,12 @@ function PatientArea(props) {
         ) : null}
       </Card>
 
-      <ListCard title="Prescriptions" items={prescriptions} render={(item) => `${item.originalFileName} - ${item.status}`} />
+      <ListCard title="Prescriptions" items={prescriptions} render={(item) => `${item.originalFilename} - ${item.status}`} />
+      <Card title="Medicine Adherence">
+        <p className="metric">{adherence?.adherencePercentage ?? 0}%</p>
+        <p>Medicine adherence for the last 7 days.</p>
+        <p>{adherence?.takenReminders ?? 0} taken out of {adherence?.totalReminders ?? 0} reminders.</p>
+      </Card>
       <ListCard title="Schedules" items={schedules} render={(item) => `${item.medicineName} - ${item.frequency}`} />
       <ListCard title="Today Diet" items={dietToday} render={(item) => `${item.mealType}: ${item.description}`} />
 
@@ -246,9 +272,11 @@ function PatientArea(props) {
 }
 
 function AuthCard({ saveSession, run }) {
-  const [mode, setMode] = useState("login");
+  const [mode, setMode] = useState("register");
+  const [busy, setBusy] = useState(false);
+  const [resultMessage, setResultMessage] = useState("Use the generated email and click Create patient account.");
   const [form, setForm] = useState({
-    email: "patient@example.com",
+    email: demoEmail,
     password: "Patient@12345",
     fullName: "Demo Patient",
     age: 31,
@@ -262,7 +290,10 @@ function AuthCard({ saveSession, run }) {
 
   async function submit(event) {
     event.preventDefault();
-    await run(mode === "login" ? "Patient login" : "Patient register", async () => {
+    setBusy(true);
+    setResultMessage(mode === "login" ? "Logging in..." : "Creating patient account...");
+
+    try {
       const path = mode === "login" ? "/api/v1/auth/login" : "/api/v1/auth/register";
       const body = mode === "login" ? { email: form.email, password: form.password } : form;
       const data = await api(path, {
@@ -270,18 +301,34 @@ function AuthCard({ saveSession, run }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body)
       });
+
       saveSession(data);
-    });
+      setResultMessage(mode === "login" ? "Logged in. Dashboard is loading now." : "Account created. Dashboard is loading now.");
+    } catch (error) {
+      const message = error.message === "Email is already registered"
+        ? "This email already exists. Click Generate fresh email, then create again."
+        : error.message;
+      setResultMessage(message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function useFreshDemoEmail() {
+    update("email", "patient-" + Date.now() + "@example.com");
+    setResultMessage("Fresh demo email generated. Now click Create patient account.");
   }
 
   return (
     <Card title="Patient Access">
       <div className="button-row">
-        <button className={mode === "login" ? "active-light" : ""} onClick={() => setMode("login")}>Login</button>
-        <button className={mode === "register" ? "active-light" : ""} onClick={() => setMode("register")}>Register</button>
+        <button type="button" className={mode === "login" ? "active-light" : ""} onClick={() => setMode("login")}>Login existing patient</button>
+        <button type="button" className={mode === "register" ? "active-light" : ""} onClick={() => setMode("register")}>Create new patient</button>
       </div>
+      <p className="hint">{resultMessage}</p>
       <form onSubmit={submit}>
         <Input label="Email" value={form.email} onChange={(value) => update("email", value)} />
+        {mode === "register" ? <button type="button" className="secondary" onClick={useFreshDemoEmail}>Generate fresh email</button> : null}
         <Input label="Password" type="password" value={form.password} onChange={(value) => update("password", value)} />
         {mode === "register" ? (
           <>
@@ -291,7 +338,7 @@ function AuthCard({ saveSession, run }) {
             <Textarea label="Medical history" value={form.medicalHistory} onChange={(value) => update("medicalHistory", value)} />
           </>
         ) : null}
-        <button type="submit">{mode === "login" ? "Login patient" : "Register patient"}</button>
+        <button disabled={busy} type="submit">{busy ? "Working..." : mode === "login" ? "Login patient" : "Create patient account and open dashboard"}</button>
       </form>
     </Card>
   );
@@ -299,23 +346,38 @@ function AuthCard({ saveSession, run }) {
 
 function PrescriptionCard({ session, run, reload, disabled }) {
   const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("Choose a prescription file, then upload it.");
 
   async function upload(event) {
     event.preventDefault();
-    await run("Uploading prescription", async () => {
+    if (!file) {
+      setMessage("Please choose a JPG, PNG, or PDF first.");
+      return;
+    }
+
+    setBusy(true);
+    setMessage("Uploading prescription and running OCR...");
+    try {
       const data = new FormData();
       data.append("file", file);
-      await api("/api/v1/prescriptions", { method: "POST", body: data }, session.accessToken);
+      const prescription = await api("/api/v1/prescriptions", { method: "POST", body: data }, session.accessToken);
+      setMessage(`Upload saved. Status: ${prescription.status}. ${prescription.status === "MANUAL_REVIEW" ? "OCR needs manual review, but the file is now visible below." : "Dashboard refreshed."}`);
       await reload();
-    });
+    } catch (error) {
+      setMessage(error.message || "Prescription upload failed.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <Card title="Prescription Upload">
-      <p>Upload JPG, PNG, or PDF. Backend sends it to S3 and Textract.</p>
+      <p>Upload JPG, PNG, or PDF. Backend stores it safely and runs OCR when available.</p>
+      <p className="hint">{message}</p>
       <form onSubmit={upload}>
-        <input disabled={disabled} type="file" accept=".jpg,.jpeg,.png,.pdf" onChange={(event) => setFile(event.target.files[0])} />
-        <button disabled={disabled || !file} type="submit">Upload prescription</button>
+        <input disabled={disabled || busy} type="file" accept=".jpg,.jpeg,.png,.pdf" onChange={(event) => setFile(event.target.files[0])} />
+        <button disabled={disabled || busy || !file} type="submit">{busy ? "Uploading..." : "Upload prescription"}</button>
       </form>
     </Card>
   );

@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 
+import com.tekravio.healthcare.audit.AuditLogService;
 import com.tekravio.healthcare.common.ApiException;
 import com.tekravio.healthcare.patient.PatientProfile;
 import com.tekravio.healthcare.patient.PatientProfileRepository;
@@ -33,18 +34,21 @@ public class MedicineScheduleService {
     private final PatientProfileRepository patientRepository;
     private final ReminderNotificationPort notificationPort;
     private final EntityManager entityManager;
+    private final AuditLogService auditLogService;
 
     public MedicineScheduleService(
             MedicineScheduleRepository scheduleRepository,
             ReminderLogRepository reminderLogRepository,
             PatientProfileRepository patientRepository,
             ReminderNotificationPort notificationPort,
-            EntityManager entityManager) {
+            EntityManager entityManager,
+            AuditLogService auditLogService) {
         this.scheduleRepository = scheduleRepository;
         this.reminderLogRepository = reminderLogRepository;
         this.patientRepository = patientRepository;
         this.notificationPort = notificationPort;
         this.entityManager = entityManager;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional
@@ -69,7 +73,9 @@ public class MedicineScheduleService {
                 .map(time -> new ScheduleTimeSlot(schedule, time))
                 .toList());
 
-        return ScheduleResponse.from(scheduleRepository.save(schedule));
+        MedicineSchedule saved = scheduleRepository.save(schedule);
+        auditLogService.record(principal.userId(), "MEDICINE_SCHEDULE_CREATED", "MEDICINE_SCHEDULE", saved.getId());
+        return ScheduleResponse.from(saved);
     }
 
     @Transactional(readOnly = true)
@@ -82,6 +88,7 @@ public class MedicineScheduleService {
     public ScheduleResponse deactivate(AuthPrincipal principal, Long scheduleId) {
         MedicineSchedule schedule = ownedSchedule(principal, scheduleId);
         schedule.setActive(false);
+        auditLogService.record(principal.userId(), "MEDICINE_SCHEDULE_DEACTIVATED", "MEDICINE_SCHEDULE", schedule.getId());
         return ScheduleResponse.from(schedule);
     }
 

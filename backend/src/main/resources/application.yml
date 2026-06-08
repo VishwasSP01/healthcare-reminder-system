@@ -48,7 +48,7 @@ app:
   firebase:
     credentials-path: ${FIREBASE_CREDENTIALS_PATH:}
   notifications:
-    fcm-retry-delay-ms: ${FCM_RETRY_DELAY_MS:60000}
+    fcm-retry-delay-ms: ${FCM_RETRY_DELAY_MS:0}
   twilio:
     account-sid: ${TWILIO_ACCOUNT_SID:}
     auth-token: ${TWILIO_AUTH_TOKEN:}
